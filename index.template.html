@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paradigm Arena — Learn or Be Eaten</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --line:#2b3340;
+    --txt:#e6edf3; --dim:#9aa7b4; --accent:#58a6ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1340px;margin:0 auto;padding:18px 16px 40px;}
+  h1{font-size:20px;margin:0 0 2px;letter-spacing:.2px}
+  .sub{color:var(--dim);font-size:13px;margin:0 0 14px;line-height:1.5}
+  .layout{display:flex;gap:16px;align-items:stretch;flex-wrap:wrap}
+  .arena-box{flex:1 1 600px;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:12px;position:relative;display:flex;justify-content:center;align-items:center}
+  canvas{display:block;width:100%;height:auto;aspect-ratio:1/1;border-radius:10px;
+    background:radial-gradient(120% 120% at 50% 28%, #0e1726 0%, #070a10 100%);}
+  .winner{position:absolute;inset:12px;border-radius:10px;display:none;
+    align-items:center;justify-content:center;flex-direction:column;gap:12px;
+    background:rgba(5,8,12,.84);backdrop-filter:blur(3px);text-align:center;padding:20px}
+  .winner h2{margin:0;font-size:30px}
+  .winner p{margin:0;color:var(--dim);font-size:14px}
+  .side{flex:1 1 320px;min-width:280px;display:flex;flex-direction:column;gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .card h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button{background:var(--accent);color:#06121f;border:0;border-radius:8px;padding:9px 14px;
+    font-weight:600;font-size:13px;cursor:pointer;transition:.12s}
+  button:hover{filter:brightness(1.08)}
+  button.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+  .speed{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:12px;color:var(--dim)}
+  input[type=range]{accent-color:var(--accent)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:6px 6px;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .swatch{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+  .bar{height:6px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-top:3px}
+  .bar > i{display:block;height:100%;border-radius:4px}
+  .dead td{opacity:.4}
+  .tag{font-size:10px;padding:1px 6px;border-radius:20px;background:var(--panel2);color:var(--dim)}
+  .legend-item{display:flex;gap:9px;margin-bottom:9px;font-size:12.5px;line-height:1.45}
+  .legend-item b{font-size:13px}
+  .legend-item .dot{flex:0 0 auto;width:12px;height:12px;border-radius:50%;margin-top:3px}
+  .legend-item .meta{color:var(--dim)}
+  .foot{color:var(--dim);font-size:12px;margin-top:8px;line-height:1.5}
+  code{background:var(--panel2);padding:1px 5px;border-radius:5px;font-size:12px}
+  .stat{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧬 Paradigm Arena</h1>
+  <p class="sub">
+    Six machine-learning paradigms compete in one arena. They all see the <b>same input</b>
+    (nearest 2 food, nearest threat, nearest prey, own size) and use the <b>same 8-direction</b>
+    action space — the only difference is how each policy was learned. Eat food to grow,
+    swallow smaller agents, and <b>the first to reach level 10 wins</b>. The policies are trained
+    in Python and run in your browser with a tiny neural network.
+  </p>
+
+  <div class="layout">
+    <div class="arena-box">
+      <canvas id="cv"></canvas>
+      <div class="winner" id="winner">
+        <h2 id="winnerTitle"></h2>
+        <p id="winnerSub"></p>
+        <button onclick="resetGame()">Play Again</button>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <div class="controls">
+          <button id="playBtn" onclick="togglePlay()">▶ Start</button>
+          <button class="ghost" onclick="resetGame()">↺ Reset</button>
+          <div class="speed">
+            Speed <input id="speed" type="range" min="1" max="6" value="2" step="1"
+              oninput="document.getElementById('spdv').textContent=this.value+'x'">
+            <span id="spdv">2x</span>
+          </div>
+        </div>
+        <div class="stat"><span>Step: <b id="tick">0</b></span><span id="aliveCt"></span></div>
+      </div>
+
+      <div class="card">
+        <h3>Leaderboard</h3>
+        <table>
+          <thead><tr><th>Paradigm</th><th class="num">Lv</th><th class="num">Score</th><th>Progress</th></tr></thead>
+          <tbody id="board"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>How each paradigm learned</h3>
+        <div id="legend"></div>
+        <div class="foot">
+          Training: each agent was first trained solo (food + prey + hazards), then dropped
+          into this arena with frozen policies — a deliberate choice to avoid the instability
+          of multi-agent competitive RL.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== embedded trained policies (exported from Python) ===== */
+const POLICIES = __POLICIES_JSON__;
+
+/* ===== meta / constants (mirror Python exactly) ===== */
+const M = POLICIES.meta;
+const DIRS = M.dirs, NACT = M.nAct, CLOSE = M.closeScale;
+const WORLD = 100;   // matches training scale (validated behavior & balance)
+const BASE_R = M.agentBaseR, FOOD_R = M.foodR, VAL = M.value;
+const EPS = 0.1;
+let EXPLORE = 0.08;   // game-layer action noise -> varied, less deterministic matches
+const SPEED_MUL = 1.0;  // game-only movement pace (does not affect decisions/parity)
+const STUCK_WIN = 10, STUCK_MIN = 6, ESC_LEN = 12;  // anti-stuck: break left-right limit cycles & wall-sticking
+let ANTISTUCK = true;
+
+/* visual identity per paradigm */
+const STYLE = {
+  RL:             {c:"#ff5d5d", short:"RL",   name:"Reinforcement Learning",
+                   how:"Learns by trial and error to maximize reward (food + survival).", method:"DQN-lite / Q-learning"},
+  Supervised:     {c:"#4dabf7", short:"SUP",  name:"Supervised (Imitation)",
+                   how:"Copies an expert's state→action examples. Only as good as its teacher.", method:"Behavioral cloning"},
+  SelfSupervised: {c:"#9775fa", short:"SELF", name:"Self-Supervised",
+                   how:"Learns a world model (predicts the next state), then plans one step ahead.", method:"World model + planning"},
+  SemiSupervised: {c:"#ffd43b", short:"SEMI", name:"Semi-Supervised",
+                   how:"Trained on a few expert labels plus lots of pseudo-labeled data. Between imitation and RL.", method:"Pseudo-labeling"},
+  Evolutionary:   {c:"#51cf66", short:"EVO",  name:"Evolutionary",
+                   how:"A population of networks evolves over generations; the fittest reproduce with mutations.", method:"Genetic algorithm"},
+  Unsupervised:   {c:"#ff922b", short:"UNS",  name:"Unsupervised",
+                   how:"No reward. Clusters food with k-means and heads to the densest cluster; flees nearby threats.", method:"k-means clustering"},
+};
+const ORDER = ["RL","Supervised","SelfSupervised","SemiSupervised","Evolutionary","Unsupervised"];
+
+/* ===== tiny NN forward (W stored as [out][in]) ===== */
+function forward(layers, x){
+  let a = x;
+  for(const L of layers){
+    const W=L.W, b=L.b, out=new Array(W.length);
+    for(let i=0;i<W.length;i++){
+      let s=b[i], Wi=W[i];
+      for(let j=0;j<Wi.length;j++) s+=Wi[j]*a[j];
+      out[i] = (L.act==="tanh") ? Math.tanh(s) : s;
+    }
+    a = out;
+  }
+  return a;
+}
+function argmax(v){let bi=0,bv=v[0];for(let i=1;i<v.length;i++)if(v[i]>bv){bv=v[i];bi=i;}return bi;}
+function radius(score){return BASE_R + 0.18*score;}
+function speedOf(score){return Math.max(1.15, M.speed - 0.055*score);} // big = slow (catchable leaders)
+function levelOf(score){return Math.min(10, 1 + Math.floor(score/3));}
+
+function unitClose(ax,ay,tx,ty){
+  const dx=tx-ax, dy=ty-ay, d=Math.hypot(dx,dy);
+  if(d<1e-6) return [0,0,1];
+  return [dx/d, dy/d, 1/(1+d/CLOSE)];
+}
+
+/* ===== state encoding (mirror Python) ===== */
+function encode(ag, agents, foods){
+  const ax=ag.x, ay=ag.y, ar=radius(ag.score);
+  // nearest two foods
+  let f1=null,f2=null,d1=1e18,d2=1e18;
+  for(const f of foods){
+    const dd=(f.x-ax)**2+(f.y-ay)**2;
+    if(dd<d1){d2=d1;f2=f1;d1=dd;f1=f;}
+    else if(dd<d2){d2=dd;f2=f;}
+  }
+  if(!f1) f1={x:ax,y:ay}; if(!f2) f2=f1;
+  // nearest threat (bigger agent) & prey (smaller agent)
+  let th=null,pr=null,td=1e18,pd=1e18;
+  for(const o of agents){
+    if(o===ag||!o.alive) continue;
+    const orr=radius(o.score), dd=(o.x-ax)**2+(o.y-ay)**2;
+    if(orr>ar+EPS){ if(dd<td){td=dd;th=o;} }
+    else if(orr<ar-EPS){ if(dd<pd){pd=dd;pr=o;} }
+  }
+  const s=new Array(13).fill(0);
+  let u;
+  u=unitClose(ax,ay,f1.x,f1.y); s[0]=u[0];s[1]=u[1];s[2]=u[2];
+  u=unitClose(ax,ay,f2.x,f2.y); s[3]=u[0];s[4]=u[1];s[5]=u[2];
+  if(th){u=unitClose(ax,ay,th.x,th.y);s[6]=u[0];s[7]=u[1];s[8]=u[2];}
+  if(pr){u=unitClose(ax,ay,pr.x,pr.y);s[9]=u[0];s[10]=u[1];s[11]=u[2];}
+  s[12]=Math.min(1,(1+ag.score/4)/10);
+  return s;
+}
+
+function valueOf(s){return VAL.food*s[2] + VAL.prey*s[11] - VAL.threat*s[8];}
+
+/* k-means: return centroid of densest cluster of food points */
+function kmeansTarget(pts,k){
+  if(pts.length<=k){
+    let mx=0,my=0; for(const p of pts){mx+=p.x;my+=p.y;}
+    return {x:mx/pts.length,y:my/pts.length};
+  }
+  const c=[]; const used=new Set();
+  while(c.length<k){const i=Math.floor(Math.random()*pts.length);if(!used.has(i)){used.add(i);c.push({x:pts[i].x,y:pts[i].y});}}
+  let lab=new Array(pts.length).fill(0);
+  for(let it=0;it<6;it++){
+    for(let i=0;i<pts.length;i++){
+      let bj=0,bd=1e18;
+      for(let j=0;j<k;j++){const dd=(pts[i].x-c[j].x)**2+(pts[i].y-c[j].y)**2;if(dd<bd){bd=dd;bj=j;}}
+      lab[i]=bj;
+    }
+    for(let j=0;j<k;j++){
+      let sx=0,sy=0,n=0;
+      for(let i=0;i<pts.length;i++)if(lab[i]===j){sx+=pts[i].x;sy+=pts[i].y;n++;}
+      if(n>0){c[j].x=sx/n;c[j].y=sy/n;}
+    }
+  }
+  const cnt=new Array(k).fill(0); for(const l of lab)cnt[l]++;
+  let bj=0; for(let j=1;j<k;j++)if(cnt[j]>cnt[bj])bj=j;
+  return c[bj];
+}
+
+/* ===== decide an action for an agent ===== */
+function decide(ag, agents, foods){
+  if(Math.random() < EXPLORE) return Math.floor(Math.random()*NACT);
+  const spec=ag.spec, s=encode(ag,agents,foods);
+  if(spec.type==="qnet"||spec.type==="policy"){
+    return argmax(forward(spec.layers,s));
+  }
+  if(spec.type==="forwardmodel"){
+    const H=spec.horizon||1, g=spec.gamma||0.9;
+    let best=-1e18, ba=0;
+    for(let a=0;a<NACT;a++){
+      let st=s.slice(), total=0;
+      for(let h=0;h<H;h++){
+        const inp=st.concat(Array.from({length:NACT},(_,k)=>k===a?1:0));
+        const d=forward(spec.layers,inp);            // delta dynamics
+        for(let i=0;i<st.length;i++) st[i]+=d[i];
+        total += Math.pow(g,h)*valueOf(st);
+      }
+      if(total>best){best=total;ba=a;}
+    }
+    return ba;
+  }
+  if(spec.type==="kmeans"){
+    let dx,dy;
+    if(s[8]>0.5){ dx=-s[6]; dy=-s[7]; }           // flee threat
+    else { const t=kmeansTarget(foods,spec.k||3); dx=t.x-ag.x; dy=t.y-ag.y; }
+    if(Math.abs(dx)<1e-9&&Math.abs(dy)<1e-9) return 0;
+    let bi=0,bv=-1e18;
+    for(let i=0;i<NACT;i++){const dot=DIRS[i][0]*dx+DIRS[i][1]*dy;if(dot>bv){bv=dot;bi=i;}}
+    return bi;
+  }
+  return 0;
+}
+
+/* ===== game state ===== */
+const NFOOD = 24, MAXTICK = 6000;
+let agents=[], foods=[], tick=0, running=false, winner=null, raf=null;
+let effects=[], lastT=0, simAcc=0;
+function now(){ return (typeof performance!=='undefined' && performance.now) ? performance.now() : Date.now(); }
+function fx(x,y,color,kind){ effects.push({x,y,color,kind,t0:now()}); }
+
+function rand(){return Math.random()*WORLD;}
+function spawnFood(){return {x:rand(),y:rand()};}
+
+function resetGame(){
+  running=false; winner=null; tick=0; simAcc=0; effects=[];
+  document.getElementById("winner").style.display="none";
+  document.getElementById("playBtn").textContent="▶ Start";
+  foods=[]; for(let i=0;i<NFOOD;i++)foods.push(spawnFood());
+  agents=ORDER.map((key)=>{
+    const x=WORLD*(0.15+0.7*Math.random()), y=WORLD*(0.15+0.7*Math.random());
+    return {key, spec:POLICIES.agents[key], st:STYLE[key],
+      x, y, rx:x, ry:y, rr:radius(0), score:0, alive:true,
+      lastAct:0, esc:0, escDir:0, ckX:x, ckY:y, ckT:0};
+  });
+  draw(now()); updateBoard();
+}
+
+function step(){
+  if(winner) return;
+  // 1) decide all actions from current state
+  const acts = agents.map(a=> a.alive ? decide(a,agents,foods) : -1);
+  // 2) move
+  agents.forEach((a,i)=>{
+    if(!a.alive) return;
+    let act=acts[i];
+    if(ANTISTUCK && a.esc>0){ act=a.escDir; a.esc--; }   // anti-stuck escape overrides policy briefly
+    const sp=speedOf(a.score)*SPEED_MUL, d=DIRS[act];
+    a.x=Math.min(WORLD,Math.max(0,a.x+sp*d[0]));
+    a.y=Math.min(WORLD,Math.max(0,a.y+sp*d[1]));
+    a.lastAct=act;
+  });
+  // 3) eat food
+  for(const a of agents){
+    if(!a.alive) continue;
+    const ar=radius(a.score);
+    for(const f of foods){
+      if(Math.hypot(f.x-a.x,f.y-a.y) < ar+FOOD_R){ a.score+=1; fx(f.x,f.y,a.st.c,'food'); f.x=rand(); f.y=rand(); }
+    }
+  }
+  // 4) agent eats agent (biggest first)
+  const live=agents.filter(a=>a.alive).sort((p,q)=>radius(q.score)-radius(p.score));
+  for(const A of live){
+    if(!A.alive) continue;
+    const ar=radius(A.score);
+    for(const B of live){
+      if(B===A||!B.alive) continue;
+      const br=radius(B.score);
+      if(ar>br+EPS && Math.hypot(A.x-B.x,A.y-B.y) < ar+0.7*br){
+        A.score += B.score + 3;            // absorb the prey (agar.io style) -> big upsets
+        B.alive=false; fx(B.x,B.y,B.st.c,'eat');
+      }
+    }
+  }
+  // anti-stuck: if an agent barely moved over a window, briefly steer it free
+  if(ANTISTUCK) for(const a of agents){
+    if(!a.alive) continue;
+    if(tick - a.ckT >= STUCK_WIN){
+      const disp=Math.hypot(a.x-a.ckX, a.y-a.ckY);
+      if(disp < STUCK_MIN && a.esc===0){
+        const nearWall = a.x<8||a.x>WORLD-8||a.y<8||a.y>WORLD-8;
+        let dx,dy;
+        if(nearWall){ dx=WORLD/2-a.x; dy=WORLD/2-a.y; }           // off the wall, toward open space
+        else { const perp=(a.lastAct+(Math.random()<0.5?2:6))%NACT; dx=DIRS[perp][0]; dy=DIRS[perp][1]; } // sidestep the loop
+        let bi=0,bv=-1e18;
+        for(let k=0;k<NACT;k++){const dot=DIRS[k][0]*dx+DIRS[k][1]*dy; if(dot>bv){bv=dot;bi=k;}}
+        a.escDir=bi; a.esc=ESC_LEN;
+      }
+      a.ckX=a.x; a.ckY=a.y; a.ckT=tick;
+    }
+  }
+  tick++;
+  // 5) win conditions
+  const alive=agents.filter(a=>a.alive);
+  let lvlWin=agents.find(a=>a.alive && levelOf(a.score)>=10);
+  if(lvlWin) endGame(lvlWin,"reached level 10!");
+  else if(alive.length<=1) endGame(alive[0]||null,"last one standing!");
+  else if(tick>=MAXTICK){
+    const top=[...agents].sort((p,q)=>q.score-p.score)[0];
+    endGame(top,"time's up — highest score");
+  }
+}
+
+function endGame(a,reason){
+  winner=a; running=false;
+  cancelAnimationFrame(raf); raf=null;
+  const w=document.getElementById("winner");
+  document.getElementById("winnerTitle").textContent = a? "🏆 "+a.st.name : "Draw";
+  document.getElementById("winnerTitle").style.color = a? a.st.c : "var(--txt)";
+  document.getElementById("winnerSub").textContent = a? (a.st.method+" — "+reason+"  •  "+tick+" steps") : reason;
+  w.style.display="flex";
+  document.getElementById("playBtn").textContent="▶ Start";
+  updateBoard();
+}
+
+/* ===== rendering ===== */
+const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
+let DPR=1;
+function fit(){
+  DPR = Math.min(2, (typeof window!=='undefined' && window.devicePixelRatio) || 1);
+  const box = cv.parentElement;
+  const cssW = (box && box.clientWidth) ? box.clientWidth - 24 : 700;
+  const size = Math.max(300, Math.min(cssW, 820));
+  cv.style.width = size+"px"; cv.style.height = size+"px";
+  cv.width = Math.round(size*DPR); cv.height = Math.round(size*DPR);
+}
+function lerp(a,b,t){ return a+(b-a)*t; }
+function shade(hex,amt){
+  const n=parseInt(hex.slice(1),16);
+  let r=(n>>16)+amt, g=((n>>8)&255)+amt, b=(n&255)+amt;
+  r=Math.max(0,Math.min(255,r)); g=Math.max(0,Math.min(255,g)); b=Math.max(0,Math.min(255,b));
+  return "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+
+function easeAgents(){                       // smooth glide between sim steps
+  for(const a of agents){
+    if(a.alive){
+      a.rx=lerp(a.rx,a.x,0.22); a.ry=lerp(a.ry,a.y,0.22);
+      a.rr=lerp(a.rr,radius(a.score),0.16);
+    } else { a.rr=lerp(a.rr,0,0.12); }       // shrink away on death
+  }
+}
+
+function draw(t){
+  const SC = cv.width/WORLD;
+  ctx.clearRect(0,0,cv.width,cv.height);
+
+  // grid
+  ctx.save(); ctx.strokeStyle="rgba(255,255,255,0.035)"; ctx.lineWidth=1;
+  for(let i=0;i<=12;i++){const p=i/12*cv.width;
+    ctx.beginPath();ctx.moveTo(p,0);ctx.lineTo(p,cv.height);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,p);ctx.lineTo(cv.width,p);ctx.stroke();}
+  ctx.restore();
+
+  // food (glow + gentle pulse)
+  for(const f of foods){
+    const x=f.x*SC, y=f.y*SC, pulse=1+0.16*Math.sin(t/300+(f.x+f.y));
+    const r=Math.max(2.2*DPR, FOOD_R*SC*0.7)*pulse;
+    ctx.save(); ctx.shadowColor="#3ddc84"; ctx.shadowBlur=8*DPR; ctx.fillStyle="#46e08c";
+    ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill(); ctx.restore();
+  }
+
+  // effects (food pop / eat burst)
+  effects = effects.filter(e => (t-e.t0) < (e.kind==='eat'?700:430));
+  for(const e of effects){
+    const span=e.kind==='eat'?700:430, age=(t-e.t0)/span, x=e.x*SC, y=e.y*SC;
+    ctx.save(); ctx.globalAlpha=(1-age)*(e.kind==='eat'?0.9:0.65);
+    ctx.strokeStyle=e.color; ctx.lineWidth=(e.kind==='eat'?3:2)*DPR;
+    const R=(e.kind==='eat'?8+age*40:3+age*15)*DPR;
+    ctx.beginPath(); ctx.arc(x,y,R,0,7); ctx.stroke(); ctx.restore();
+  }
+
+  // leader (highest score alive) gets a pulsing ring
+  let leader=null;
+  for(const a of agents){ if(a.alive && (!leader||a.score>leader.score)) leader=a; }
+
+  for(const a of agents){
+    if(!a.alive && a.rr<0.06) continue;
+    const x=a.rx*SC, y=a.ry*SC, r=Math.max(1,a.rr*SC), dead=!a.alive;
+    ctx.save();
+    if(dead) ctx.globalAlpha=0.55;
+    ctx.shadowColor=a.st.c; ctx.shadowBlur=(dead?4:15)*DPR;
+    const g=ctx.createRadialGradient(x-r*0.3,y-r*0.35,r*0.15, x,y,r);
+    g.addColorStop(0,"#ffffff"); g.addColorStop(0.2,a.st.c); g.addColorStop(1,shade(a.st.c,-34));
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
+    ctx.shadowBlur=0; ctx.lineWidth=Math.max(1.5,2*DPR); ctx.strokeStyle="rgba(255,255,255,.85)";
+    ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.stroke();
+    ctx.restore();
+    if(dead) continue;
+
+    if(a===leader){
+      ctx.save(); ctx.globalAlpha=0.55; ctx.strokeStyle=a.st.c; ctx.lineWidth=2*DPR;
+      ctx.beginPath(); ctx.arc(x,y,r+(4+2*Math.sin(t/200))*DPR,0,7); ctx.stroke(); ctx.restore();
+    }
+    ctx.fillStyle="#06121f"; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.font="bold "+Math.max(9,Math.min(16,r*0.6))+"px sans-serif";
+    ctx.fillText(a.st.short,x,y);
+    ctx.fillStyle="#fff"; ctx.font="bold "+(10*DPR)+"px sans-serif";
+    ctx.fillText("L"+levelOf(a.score), x, y-r-10*DPR);
+  }
+}
+
+let boardCount=0;
+function updateBoard(){
+  const tb=document.getElementById("board");
+  const sorted=[...agents].sort((p,q)=> (q.alive-p.alive) || (q.score-p.score));
+  tb.innerHTML = sorted.map(a=>{
+    const lvl=levelOf(a.score), prog=(a.score%3)/3*100, lvlPct=lvl/10*100;
+    return `<tr class="${a.alive?'':'dead'}">
+      <td><span class="swatch" style="background:${a.st.c}"></span>${a.st.short}
+        ${a.alive?'':'<span class="tag">eaten</span>'}</td>
+      <td class="num">${lvl}</td>
+      <td class="num">${a.score}</td>
+      <td><div class="bar"><i style="width:${lvlPct}%;background:${a.st.c}"></i></div></td>
+    </tr>`;
+  }).join("");
+  document.getElementById("tick").textContent=tick;
+  document.getElementById("aliveCt").textContent=agents.filter(a=>a.alive).length+" / "+agents.length+" alive";
+}
+
+/* persistent render loop: fixed-step simulation, 60fps smooth drawing */
+function frame(t){
+  if(!lastT) lastT=t;
+  const dt=Math.min(120, t-lastT); lastT=t;
+  if(running && !winner){
+    const speed=+document.getElementById("speed").value;   // 1..6
+    const stepMs = 1000/(6 + speed*5);                      // sim steps per second
+    simAcc += dt;
+    let n=0;
+    while(simAcc>=stepMs && n<6 && !winner){ step(); simAcc-=stepMs; n++; }
+  }
+  easeAgents();
+  draw(t);
+  if(boardCount++ % 6 === 0) updateBoard();
+  raf=requestAnimationFrame(frame);
+}
+
+function togglePlay(){
+  if(winner) resetGame();
+  running=!running;
+  document.getElementById("playBtn").textContent = running? "⏸ Pause":"▶ Start";
+}
+
+/* legend */
+document.getElementById("legend").innerHTML = ORDER.map(k=>{
+  const s=STYLE[k];
+  return `<div class="legend-item"><span class="dot" style="background:${s.c}"></span>
+    <div><b>${s.name}</b> <span class="meta">· ${s.method}</span><br>
+    <span class="meta">${s.how}</span></div></div>`;
+}).join("");
+
+/* init */
+fit();
+if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener("resize", fit);
+resetGame();
+raf = requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+
+# scratch / generated artifacts
+*.log
+frag_*.json
+states.json
+nets_cache.npz
+frame_*.png
+
+# OS
+.DS_Store
