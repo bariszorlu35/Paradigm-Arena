@@ -4,6 +4,10 @@
 
 Every agent sees the **same input** and uses the **same action space** — the only thing that differs is *how its policy was learned*. They roam an [agar.io](https://agar.io)-style board, eat food to grow, swallow smaller agents, and the first to reach **level 10 wins**. Get eaten and you're out.
 
+   ## Live Demo
+
+   Play it here: https://bariszorlu.com/paradigm-arena/
+   
 ![Paradigm Arena gameplay](demo.gif)
 
 > The GIF above is rendered directly from the same engine (`make_gif.py`).
